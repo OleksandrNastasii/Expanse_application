@@ -1,4 +1,4 @@
-import csv
+import pandas as pd
 from tempfile import NamedTemporaryFile
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,22 +29,23 @@ def download_balance_sheet(db: Session = Depends(get_db)):
     if not balances:
         raise HTTPException(status_code=404, detail="No balances found")
 
-    # Create a temporary CSV file for the balance sheet
-    with NamedTemporaryFile(delete=False, mode='w', newline='') as temp_file:
-        writer = csv.writer(temp_file)
-        writer.writerow(['User ID', 'User Name', 'Amount Owed'])  # CSV header
+    # Create a temporary Excel file for the balance sheet using pandas
+    df = pd.DataFrame([{
+        'User ID': balance.user_id,
+        'User Name': balance.user_name,
+        'Amount Owed': balance.amount_owed,
+    } for balance in balances])
 
-        # Write each balance to the CSV file
-        for balance in balances:
-            writer.writerow([balance.user_id, balance.user_name, balance.amount_owed])
-
-        # Get the file path
+    # Create a temporary Excel file
+    with NamedTemporaryFile(delete=False, mode='wb') as temp_file:
+        # Save the DataFrame to the Excel file
+        df.to_excel(temp_file, index=False, engine='openpyxl')
         temp_file_path = temp_file.name
 
-    # Serve the CSV file as a downloadable file
+    # Serve the Excel file as a downloadable file
     return FileResponse(
         path=temp_file_path,
-        media_type='application/octet-stream',
-        filename='balance_sheet.csv',
-        headers={'Content-Disposition': 'attachment; filename=balance_sheet.csv'}
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        filename='balance_sheet.xlsx',
+        headers={'Content-Disposition': 'attachment; filename=balance_sheet.xlsx'}
     )
